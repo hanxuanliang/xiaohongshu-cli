@@ -98,12 +98,12 @@ class XhsClient:
     def _base_headers(self) -> dict[str, str]:
         return {
             "user-agent": USER_AGENT,
-            "content-type": "application/json",
+            "content-type": "application/json;charset=UTF-8",
             "cookie": cookies_to_string(self.cookies),
             "origin": HOME_URL,
             "referer": f"{HOME_URL}/",
-            # Anti-detection: must match UA (macOS Chrome)
-            "sec-ch-ua": f'"Chromium";v="{CHROME_VERSION}", "Google Chrome";v="{CHROME_VERSION}", "Not-A.Brand";v="8"',
+            # Anti-detection: must match UA (macOS Chrome 145+)
+            "sec-ch-ua": f'"Not:A-Brand";v="99", "Google Chrome";v="{CHROME_VERSION}", "Chromium";v="{CHROME_VERSION}"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"macOS"',
             "sec-fetch-dest": "empty",
@@ -345,6 +345,9 @@ class XhsClient:
             "search_id": search_id,
             "sort": sort,
             "note_type": note_type,
+            "ext_flags": [],
+            "geo": "",
+            "image_formats": ["jpg", "webp", "avif"],
         })
 
     def get_note_by_id(
@@ -367,7 +370,7 @@ class XhsClient:
         return self._main_api_post("/api/sns/web/v1/feed", {
             "source_note_id": note_id,
             "image_formats": ["jpg", "webp", "avif"],
-            "extra": {"need_body_topic": 1},
+            "extra": {"need_body_topic": "1"},
             "xsec_source": xsec_source,
             "xsec_token": xsec_token,
         })

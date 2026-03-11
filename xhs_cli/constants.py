@@ -5,7 +5,7 @@ CREATOR_HOST = "https://creator.xiaohongshu.com"
 HOME_URL = "https://www.xiaohongshu.com"
 UPLOAD_HOST = "https://ros-upload.xiaohongshu.com"
 
-CHROME_VERSION = "137"
+CHROME_VERSION = "145"
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
