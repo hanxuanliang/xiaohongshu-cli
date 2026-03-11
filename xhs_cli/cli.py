@@ -32,7 +32,7 @@ from .commands import auth, creator, interactions, reading, social
 @click.option("-v", "--verbose", is_flag=True, help="Enable debug logging")
 @click.option(
     "--cookie-source",
-    type=click.Choice(["chrome", "firefox", "edge", "safari", "brave"]),
+    type=str,
     default="chrome",
     show_default=True,
     help="Browser to read cookies from",

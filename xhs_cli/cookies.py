@@ -7,7 +7,6 @@ import logging
 import subprocess
 import sys
 import time
-from collections.abc import Callable
 from pathlib import Path
 
 from .constants import CONFIG_DIR_NAME, COOKIE_FILE
@@ -18,14 +17,6 @@ logger = logging.getLogger(__name__)
 COOKIE_TTL_DAYS = 7
 _COOKIE_TTL_SECONDS = COOKIE_TTL_DAYS * 86400
 
-BrowserLoader = Callable[..., object]
-SUPPORTED_BROWSERS: dict[str, str] = {
-    "chrome": "chrome",
-    "firefox": "firefox",
-    "edge": "edge",
-    "safari": "safari",
-    "brave": "brave",
-}
 
 
 def get_config_dir() -> Path:
@@ -72,28 +63,37 @@ def clear_cookies() -> None:
         logger.debug("Cleared cookies from %s", cookie_path)
 
 
-def _browser_loaders() -> dict[str, BrowserLoader]:
+def _get_browser_loader(source: str):
+    """Get browser cookie loader from browser_cookie3 by name."""
     import browser_cookie3 as bc3
 
-    return {
-        "chrome": bc3.chrome,
-        "firefox": bc3.firefox,
-        "edge": bc3.edge,
-        "safari": bc3.safari,
-        "brave": bc3.brave,
-    }
+    loader = getattr(bc3, source, None)
+    if loader is None or not callable(loader):
+        import inspect
+
+        available = sorted(
+            name
+            for name in dir(bc3)
+            if not name.startswith("_")
+            and callable(getattr(bc3, name))
+            and hasattr(getattr(bc3, name), "__code__")
+            and "domain_name" in inspect.signature(getattr(bc3, name)).parameters
+        )
+        raise ValueError(
+            f"Unknown browser: {source!r}. Available: {', '.join(available)}"
+        )
+    return loader
 
 
 def _extract_in_process(source: str) -> dict[str, str] | None:
     """Extract cookies in-process for macOS Keychain compatibility."""
     try:
-        loader = _browser_loaders().get(source)
+        loader = _get_browser_loader(source)
     except ImportError:
         logger.debug("browser_cookie3 not installed, skipping in-process extraction")
         return None
-
-    if loader is None:
-        logger.debug("Unsupported browser source: %s", source)
+    except ValueError as exc:
+        logger.debug("%s", exc)
         return None
 
     try:
@@ -121,17 +121,9 @@ except ImportError:
     print(json.dumps({"error": "browser-cookie3 not installed"}))
     sys.exit(0)
 
-browsers = {
-    "chrome": bc3.chrome,
-    "firefox": bc3.firefox,
-    "edge": bc3.edge,
-    "safari": bc3.safari,
-    "brave": bc3.brave,
-}
-
 source = sys.argv[1]
-loader = browsers.get(source)
-if not loader:
+loader = getattr(bc3, source, None)
+if not loader or not callable(loader):
     print(json.dumps({"error": f"Unknown browser: {source}"}))
     sys.exit(0)
 

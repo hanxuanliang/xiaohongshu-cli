@@ -55,7 +55,7 @@ class NoCookieError(XhsApiError):
         if details:
             msg += f"\n{details}"
         msg += "\n\nTroubleshooting:\n"
-        msg += "  1. Open Chrome and visit https://www.xiaohongshu.com/\n"
+        msg += f"  1. Open {source} and visit https://www.xiaohongshu.com/\n"
         msg += "  2. Make sure you are logged in\n"
-        msg += "  3. Try: xhs login --cookie-source chrome"
+        msg += f"  3. Try: xhs login --cookie-source {source}"
         super().__init__(msg)
