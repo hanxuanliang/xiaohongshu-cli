@@ -2,7 +2,7 @@
 name: xiaohongshu-cli
 description: Use xiaohongshu-cli for ALL Xiaohongshu (Little Red Book, 小红书) operations — searching notes, reading content, browsing users, liking, collecting, commenting, following, and posting. Invoke whenever the user requests any Xiaohongshu interaction.
 author: jackwener
-version: "0.5.0"
+version: "0.6.3"
 tags:
   - xiaohongshu
   - xhs
@@ -85,8 +85,8 @@ Payloads live under `.data`.
 | Command | Description | Example |
 |---------|-------------|---------|
 | `xhs search <keyword>` | Search notes | `xhs search "美食" --sort popular --type video` |
-| `xhs read <id_or_url>` | Read a note (URL auto-extracts xsec_token) | `xhs read "https://...?xsec_token=xxx"` |
-| `xhs comments <id_or_url>` | Get comments (xsec_token required — paste URL) | `xhs comments "https://...?xsec_token=..."` |
+| `xhs read <id_or_url_or_index>` | Read a note by ID, URL, or short index | `xhs read 1` / `xhs read "https://...?xsec_token=xxx"` |
+| `xhs comments <id_or_url_or_index>` | Get comments by ID, URL, or short index | `xhs comments 1` / `xhs comments "https://...?xsec_token=..."` |
 | `xhs comments <id_or_url> --all` | Get ALL comments (auto-paginate) | `xhs comments "<url>" --all --json` |
 | `xhs sub-comments <note_id> <comment_id>` | Get replies to comment | `xhs sub-comments abc 123` |
 | `xhs user <user_id>` | View user profile | `xhs user 5f2e123` |
@@ -103,12 +103,12 @@ Payloads live under `.data`.
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `xhs like <id_or_url>` | Like a note | `xhs like abc123` |
-| `xhs like <id_or_url> --undo` | Unlike a note | `xhs like abc123 --undo` |
-| `xhs favorite <id_or_url>` | Bookmark a note | `xhs favorite abc123` |
-| `xhs unfavorite <id_or_url>` | Remove bookmark | `xhs unfavorite abc123` |
-| `xhs comment <id_or_url> -c "text"` | Post a comment | `xhs comment abc123 -c "好看！"` |
-| `xhs reply <id_or_url> --comment-id ID -c "text"` | Reply to comment | `xhs reply abc123 --comment-id 456 -c "谢谢"` |
+| `xhs like <id_or_url_or_index>` | Like a note | `xhs like 1` / `xhs like abc123` |
+| `xhs like <id_or_url_or_index> --undo` | Unlike a note | `xhs like 1 --undo` |
+| `xhs favorite <id_or_url_or_index>` | Bookmark a note | `xhs favorite 1` |
+| `xhs unfavorite <id_or_url_or_index>` | Remove bookmark | `xhs unfavorite 1` |
+| `xhs comment <id_or_url_or_index> -c "text"` | Post a comment | `xhs comment 1 -c "好看！"` |
+| `xhs reply <id_or_url_or_index> --comment-id ID -c "text"` | Reply to comment | `xhs reply 1 --comment-id 456 -c "谢谢"` |
 | `xhs delete-comment <note_id> <comment_id>` | Delete own comment | `xhs delete-comment abc 123 -y` |
 
 ### Social
@@ -180,6 +180,14 @@ xhs comments "$NOTE_URL" --all --json | jq '[.data.comments[] | select(.content 
 ```bash
 # Browse recommendation feed
 xhs feed --yaml
+
+# Interactive short-index workflow
+xhs search "旅行"
+xhs read 1
+xhs comments 1
+xhs like 1
+xhs favorite 1
+xhs comment 1 -c "收藏了"
 
 # Browse trending by category
 xhs hot -c food --yaml

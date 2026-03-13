@@ -3,10 +3,9 @@
 import click
 
 from ..command_normalizers import normalize_paged_notes
-from ..cookies import cache_xsec_token
+from ..cookies import cache_note_context
 from ..formatter import (
     maybe_print_structured,
-    parse_note_url,
     print_info,
     render_comments,
     render_feed,
@@ -17,12 +16,12 @@ from ..formatter import (
     render_user_posts,
     render_users,
 )
+from ..note_refs import resolve_note_reference, save_index_from_items, save_index_from_notes
 from ._common import exit_for_error, handle_command, run_client_action, structured_output_options
-
 
 # ─── Token propagation ─────────────────────────────────────────────────────
 
-def _cache_tokens_from_items(data: dict) -> None:
+def _cache_tokens_from_items(data: dict, *, xsec_source: str) -> None:
     """Auto-cache xsec_token from search/feed API results.
 
     Each note item may carry its own xsec_token bound to the source
@@ -34,7 +33,7 @@ def _cache_tokens_from_items(data: dict) -> None:
         note_id = item.get("id", note_card.get("note_id", ""))
         token = item.get("xsec_token", note_card.get("xsec_token", ""))
         if note_id and token:
-            cache_xsec_token(note_id, token)
+            cache_note_context(note_id, token, xsec_source)
 
 # ─── Sort mapping ────────────────────────────────────────────────────────────
 
@@ -67,7 +66,8 @@ def search(ctx, keyword: str, sort: str, note_type: str, page: int, as_json: boo
             sort=SORT_MAP[sort],
             note_type=TYPE_MAP[note_type],
         )
-        _cache_tokens_from_items(result)
+        _cache_tokens_from_items(result, xsec_source="pc_search")
+        save_index_from_items(result, xsec_source="pc_search")
         return result
 
     handle_command(
@@ -85,15 +85,21 @@ def search(ctx, keyword: str, sort: str, note_type: str, page: int, as_json: boo
 @structured_output_options
 @click.pass_context
 def read(ctx, id_or_url: str, xsec_token: str, as_json: bool, as_yaml: bool):
-    """Read a note by ID or URL."""
-    note_id, url_token = parse_note_url(id_or_url)
-    token = xsec_token or url_token
+    """Read a note by ID, URL, or short index."""
+    note_id, token, url_source = resolve_note_reference(id_or_url, xsec_token=xsec_token)
+    xsec_source = url_source or "pc_feed"
     if token:
-        cache_xsec_token(note_id, token)
+        cache_note_context(note_id, token, xsec_source)
+
+    def _read_action(client):
+        kwargs = {"xsec_token": token}
+        if url_source:
+            kwargs["xsec_source"] = url_source
+        return client.get_note_detail(note_id, **kwargs)
 
     handle_command(
         ctx,
-        action=lambda client: client.get_note_detail(note_id, xsec_token=token),
+        action=_read_action,
         render=render_note,
         as_json=as_json,
         as_yaml=as_yaml,
@@ -108,16 +114,23 @@ def read(ctx, id_or_url: str, xsec_token: str, as_json: bool, as_yaml: bool):
 @structured_output_options
 @click.pass_context
 def comments(ctx, id_or_url: str, cursor: str, xsec_token: str, fetch_all: bool, as_json: bool, as_yaml: bool):
-    """View comments on a note. Use --all to fetch all pages."""
-    note_id, url_token = parse_note_url(id_or_url)
-    token = xsec_token or url_token
+    """View comments on a note by ID, URL, or short index."""
+    note_id, token, url_source = resolve_note_reference(id_or_url, xsec_token=xsec_token)
+    xsec_source = url_source or "pc_feed"
     if token:
-        cache_xsec_token(note_id, token)
+        cache_note_context(note_id, token, xsec_source)
 
     def _load_comments(client):
+        common_kwargs = {"xsec_token": token}
+        if url_source:
+            common_kwargs["xsec_source"] = url_source
         if fetch_all:
-            return client.get_all_comments(note_id, xsec_token=token)
-        return client.get_comments(note_id, cursor=cursor, xsec_token=token)
+            return client.get_all_comments(note_id, **common_kwargs)
+        return client.get_comments(
+            note_id,
+            cursor=cursor,
+            **common_kwargs,
+        )
 
     def _render_comments(data):
         render_comments(data)
@@ -156,6 +169,12 @@ def user(ctx, user_id: str, as_json: bool, as_yaml: bool):
 @click.pass_context
 def user_posts(ctx, user_id: str, cursor: str, as_json: bool, as_yaml: bool):
     """List a user's published notes."""
+    def _user_posts_action(client):
+        data = client.get_user_notes(user_id, cursor=cursor)
+        page = normalize_paged_notes(data)
+        save_index_from_notes(page["notes"])
+        return data
+
     def _render_user_posts(data):
         page = normalize_paged_notes(data)
         render_user_posts(page["notes"])
@@ -164,7 +183,7 @@ def user_posts(ctx, user_id: str, cursor: str, as_json: bool, as_yaml: bool):
 
     handle_command(
         ctx,
-        action=lambda client: client.get_user_notes(user_id, cursor=cursor),
+        action=_user_posts_action,
         render=_render_user_posts,
         as_json=as_json,
         as_yaml=as_yaml,
@@ -178,7 +197,8 @@ def feed(ctx, as_json: bool, as_yaml: bool):
     """Browse the recommendation feed."""
     def _feed_action(client):
         result = client.get_home_feed()
-        _cache_tokens_from_items(result)
+        _cache_tokens_from_items(result, xsec_source="pc_feed")
+        save_index_from_items(result, xsec_source="pc_feed")
         return result
 
     handle_command(
@@ -264,7 +284,8 @@ def hot(ctx, category: str, as_json: bool, as_yaml: bool):
     """Browse hot/trending notes by category."""
     def _hot_action(client):
         result = client.get_hot_feed(HOT_CATEGORIES[category])
-        _cache_tokens_from_items(result)
+        _cache_tokens_from_items(result, xsec_source="pc_feed")
+        save_index_from_items(result, xsec_source="pc_feed")
         return result
 
     handle_command(

@@ -1,14 +1,25 @@
 """Unit tests for cookie management (no network required)."""
 
 
+import time
+
 import pytest
 
 from xhs_cli.cookies import (
+    NOTE_CONTEXT_TTL_SECONDS,
+    cache_note_context,
     clear_cookies,
     cookies_to_string,
+    get_cached_note_context,
+    get_cached_xsec_token,
     get_cookies,
+    get_index_cache_path,
+    get_note_by_index,
+    get_token_cache_path,
     load_saved_cookies,
+    load_token_cache,
     save_cookies,
+    save_note_index,
 )
 
 
@@ -17,6 +28,8 @@ def tmp_config_dir(tmp_path, monkeypatch):
     """Override config dir to use temp directory."""
     monkeypatch.setattr("xhs_cli.cookies.get_config_dir", lambda: tmp_path)
     monkeypatch.setattr("xhs_cli.cookies.get_cookie_path", lambda: tmp_path / "cookies.json")
+    monkeypatch.setattr("xhs_cli.cookies._TOKEN_CACHE_MEMORY", None)
+    monkeypatch.setattr("xhs_cli.cookies._TOKEN_CACHE_PATH", None)
     return tmp_path
 
 
@@ -96,3 +109,74 @@ class TestGetCookies:
         assert browser == "chrome"
         assert cookies == {"a1": "fresh"}
         assert saved == [{"a1": "fresh"}]
+
+
+class TestNoteContextCache:
+    def test_cache_persists_token_and_source(self, tmp_config_dir):
+        cache_note_context("note-1", "token-1", "pc_search", context="search")
+
+        assert get_cached_xsec_token("note-1") == "token-1"
+        context = get_cached_note_context("note-1")
+        assert context["token"] == "token-1"
+        assert context["source"] == "pc_search"
+        assert context["context"] == "search"
+
+    def test_load_token_cache_keeps_legacy_entries_compatible(self, tmp_config_dir):
+        get_token_cache_path().write_text('{"note-1":"legacy-token"}')
+
+        cache = load_token_cache()
+        assert cache["note-1"]["token"] == "legacy-token"
+        assert cache["note-1"]["source"] == ""
+
+    def test_expired_note_context_is_not_returned(self, tmp_config_dir):
+        stale_ts = time.time() - NOTE_CONTEXT_TTL_SECONDS - 10
+        get_token_cache_path().write_text(
+            f'{{"note-1":{{"token":"stale-token","source":"pc_search","ts":{stale_ts}}}}}'
+        )
+
+        assert get_cached_note_context("note-1") == {}
+
+
+class TestNoteIndexCache:
+    def test_save_and_resolve_index_with_source(self, tmp_config_dir):
+        save_note_index([
+            {
+                "note_id": "note-1",
+                "xsec_token": "token-1",
+                "xsec_source": "pc_search",
+            }
+        ])
+
+        assert get_note_by_index(1) == {
+            "note_id": "note-1",
+            "xsec_token": "token-1",
+            "xsec_source": "pc_search",
+        }
+
+    def test_save_empty_index_clears_previous_entries(self, tmp_config_dir):
+        save_note_index([
+            {
+                "note_id": "note-1",
+                "xsec_token": "token-1",
+                "xsec_source": "pc_search",
+            }
+        ])
+        save_note_index([])
+
+        assert get_note_by_index(1) is None
+        assert get_index_cache_path().read_text() == "[]"
+
+    def test_index_file_permissions(self, tmp_config_dir):
+        save_note_index([{"note_id": "note-1", "xsec_token": "", "xsec_source": ""}])
+
+        stat = get_index_cache_path().stat()
+        assert stat.st_mode & 0o777 == 0o600
+
+    def test_index_normalizes_missing_optional_fields(self, tmp_config_dir):
+        get_index_cache_path().write_text('[{"note_id":"note-1"}]')
+
+        assert get_note_by_index(1) == {
+            "note_id": "note-1",
+            "xsec_token": "",
+            "xsec_source": "",
+        }
