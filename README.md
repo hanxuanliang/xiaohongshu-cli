@@ -229,11 +229,9 @@ mkdir -p .agents/skills
 git clone git@github.com:jackwener/xiaohongshu-cli.git .agents/skills/xiaohongshu-cli
 ```
 
-### OpenClaw / ClawHub
+### ~~OpenClaw / ClawHub~~ (Deprecated)
 
-```bash
-clawhub install xiaohongshu-cli
-```
+> ⚠️ ClawHub install method is deprecated and no longer supported. Use [Skills CLI](#skills-cli-recommended) or Manual Install above.
 
 ## Project Structure
 
@@ -467,11 +465,9 @@ mkdir -p .agents/skills
 git clone git@github.com:jackwener/xiaohongshu-cli.git .agents/skills/xiaohongshu-cli
 ```
 
-### OpenClaw / ClawHub
+### ~~OpenClaw / ClawHub~~（已过时）
 
-```bash
-clawhub install xiaohongshu-cli
-```
+> ⚠️ ClawHub 安装方式已过时，不再支持。请使用上方的 Skills CLI 或手动安装。
 
 ## License
 
